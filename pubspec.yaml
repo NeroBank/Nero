@@ -1,0 +1,34 @@
+name: nero_bible
+description: NERO - Read, Reflect & Grow. Complete King James Version Bible app.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.10.0
+  shared_preferences: ^2.5.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/bible_banner.png
+    - assets/icon/nero_launcher.png
+    - assets/bible/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon/nero_launcher.png
+  adaptive_icon_background: "#710B12"
+  adaptive_icon_foreground: assets/icon/nero_launcher.png
+  min_sdk_android: 21
