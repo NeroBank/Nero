@@ -7,6 +7,9 @@ const Color wine = Color(0xFF8E1019);
 const Color deepWine = Color(0xFF57070D);
 const Color gold = Color(0xFFD9A441);
 const Color paper = Color(0xFFFFFBF6);
+const Color darkBackground = Color(0xFF171315);
+const Color darkSurface = Color(0xFF251D20);
+const Color darkText = Color(0xFFF5EDEF);
 
 const List<String> bibleBooks = [
   'Genesis','Exodus','Leviticus','Numbers','Deuteronomy','Joshua','Judges','Ruth',
@@ -25,22 +28,73 @@ Future<void> main() async {
   runApp(const NeroApp());
 }
 
-class NeroApp extends StatelessWidget {
+class NeroApp extends StatefulWidget {
   const NeroApp({super.key});
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'NERO', debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      useMaterial3: true, scaffoldBackgroundColor: paper,
-      colorScheme: ColorScheme.fromSeed(seedColor: wine, primary: wine, secondary: gold),
-      appBarTheme: const AppBarTheme(backgroundColor: wine, foregroundColor: Colors.white, centerTitle: true),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true, fillColor: const Color(0xFFF8F1EC),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      ),
+  State<NeroApp> createState() => _NeroAppState();
+}
+
+class _NeroAppState extends State<NeroApp> {
+  ThemeMode _themeMode = ThemeMode.light;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('nero_theme_mode');
+    if (!mounted) return;
+    setState(() => _themeMode = saved == 'dark' ? ThemeMode.dark : ThemeMode.light);
+  }
+
+  Future<void> _toggleTheme() async {
+    final next = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    setState(() => _themeMode = next);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('nero_theme_mode', next == ThemeMode.dark ? 'dark' : 'light');
+  }
+
+  ThemeData _lightTheme() => ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: paper,
+    colorScheme: ColorScheme.fromSeed(seedColor: wine, primary: wine, secondary: gold, brightness: Brightness.light).copyWith(surface: paper),
+    appBarTheme: const AppBarTheme(backgroundColor: wine, foregroundColor: Colors.white, centerTitle: true),
+    navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFFFCE9E7), indicatorColor: Color(0xFFF5D8B4)),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true, fillColor: const Color(0xFFF8F1EC),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     ),
-    home: const NeroHome(),
+  );
+
+  ThemeData _darkTheme() => ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    scaffoldBackgroundColor: darkBackground,
+    colorScheme: ColorScheme.fromSeed(seedColor: wine, primary: const Color(0xFFFF8A91), secondary: gold, brightness: Brightness.dark).copyWith(surface: darkSurface, onSurface: darkText),
+    appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF690C15), foregroundColor: Colors.white, centerTitle: true),
+    navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFF281C20), indicatorColor: Color(0xFF57333A)),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true, fillColor: const Color(0xFF33282C),
+      hintStyle: const TextStyle(color: Color(0xFFCCBFC3)),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    ),
+    cardTheme: const CardThemeData(color: darkSurface),
+  );
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'NERO',
+    debugShowCheckedModeBanner: false,
+    theme: _lightTheme(),
+    darkTheme: _darkTheme(),
+    themeMode: _themeMode,
+    home: NeroHome(isDarkMode: _themeMode == ThemeMode.dark, onToggleTheme: _toggleTheme),
   );
 }
 
@@ -55,7 +109,9 @@ class NeroMark extends StatelessWidget {
 }
 
 class NeroHome extends StatefulWidget {
-  const NeroHome({super.key});
+  final bool isDarkMode;
+  final VoidCallback onToggleTheme;
+  const NeroHome({super.key, required this.isDarkMode, required this.onToggleTheme});
   @override
   State<NeroHome> createState() => _NeroHomeState();
 }
@@ -71,7 +127,10 @@ class _NeroHomeState extends State<NeroHome> {
       appBar: AppBar(
         leading: const Padding(padding: EdgeInsets.all(10), child: NeroMark(size: 36)),
         title: const Text('NERO', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
-        actions: [IconButton(onPressed: () => showSearch(context: context, delegate: BibleSearchDelegate()), icon: const Icon(Icons.search), tooltip: 'Search the Bible')],
+        actions: [
+          IconButton(onPressed: widget.onToggleTheme, icon: Icon(widget.isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined), tooltip: widget.isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'),
+          IconButton(onPressed: () => showSearch(context: context, delegate: BibleSearchDelegate()), icon: const Icon(Icons.search), tooltip: 'Search the Bible'),
+        ],
       ),
       body: IndexedStack(index: tab, children: pages),
       bottomNavigationBar: NavigationBar(
@@ -103,14 +162,14 @@ class _Dashboard extends StatelessWidget {
       ])),
     ])),
     const SizedBox(height: 18),
-    const Text('VERSE OF THE DAY', style: TextStyle(color: wine, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+    Text('VERSE OF THE DAY', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
     const SizedBox(height: 8),
-    Card(color: const Color(0xFFFFF1E4), elevation: 0, child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-      Text('“The LORD is my shepherd; I shall not want.”', style: TextStyle(fontSize: 21, height: 1.45, fontWeight: FontWeight.w600, color: deepWine)),
-      SizedBox(height: 8), Text('PSALM 23:1', style: TextStyle(color: wine, fontWeight: FontWeight.bold)),
+    Card(color: Theme.of(context).colorScheme.surfaceContainerHighest, elevation: 0, child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('“The LORD is my shepherd; I shall not want.”', style: TextStyle(fontSize: 21, height: 1.45, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
+      const SizedBox(height: 8), Text('PSALM 23:1', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
     ]))),
     const SizedBox(height: 18),
-    const Text('QUICK ACCESS', style: TextStyle(color: wine, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+    Text('QUICK ACCESS', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
     const SizedBox(height: 10),
     Row(children: [
       Expanded(child: _QuickTile(icon: Icons.menu_book, title: 'Read Bible', onTap: onRead)),
@@ -118,9 +177,9 @@ class _Dashboard extends StatelessWidget {
       Expanded(child: _QuickTile(icon: Icons.search, title: 'Search', onTap: () => showSearch(context: context, delegate: BibleSearchDelegate()))),
     ]),
     const SizedBox(height: 18),
-    const Text('THE BIBLE', style: TextStyle(color: wine, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+    Text('THE BIBLE', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
     const SizedBox(height: 8),
-    Text('Explore all 66 books of the King James Version, from Genesis to Revelation.', style: TextStyle(color: Colors.brown.shade700, height: 1.4)),
+    Text('Explore all 66 books of the King James Version, from Genesis to Revelation.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4)),
   ]);
 }
 
@@ -128,7 +187,7 @@ class _QuickTile extends StatelessWidget {
   final IconData icon; final String title; final VoidCallback onTap;
   const _QuickTile({required this.icon, required this.title, required this.onTap});
   @override
-  Widget build(BuildContext context) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(16), child: Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFEAD9D0))), child: Column(children: [Icon(icon, color: wine, size: 30), const SizedBox(height: 8), Text(title, style: const TextStyle(fontWeight: FontWeight.bold))])));
+  Widget build(BuildContext context) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(16), child: Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Column(children: [Icon(icon, color: Theme.of(context).colorScheme.primary, size: 30), const SizedBox(height: 8), Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface))])));
 }
 
 class BibleLibrary extends StatefulWidget {
@@ -154,7 +213,7 @@ class _BibleLibraryState extends State<BibleLibrary> {
       ),
       Expanded(child: ListView.builder(itemCount: books.length, itemBuilder: (context, i) {
         final book = books[i];
-        return ListTile(leading: CircleAvatar(backgroundColor: wine.withOpacity(.1), child: const Icon(Icons.menu_book, color: wine)), title: Text(book, style: const TextStyle(fontWeight: FontWeight.w600)), subtitle: Text(bibleBooks.indexOf(book) < 39 ? 'Old Testament' : 'New Testament'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChapterPicker(book: book))));
+        return ListTile(leading: CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer, child: Icon(Icons.menu_book, color: Theme.of(context).colorScheme.primary)), title: Text(book, style: const TextStyle(fontWeight: FontWeight.w600)), subtitle: Text(bibleBooks.indexOf(book) < 39 ? 'Old Testament' : 'New Testament'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChapterPicker(book: book))));
       })),
     ]);
   }
@@ -176,7 +235,7 @@ class ChapterPicker extends StatelessWidget {
     body: FutureBuilder<int>(future: count(), builder: (context, snap) {
       if (snap.hasError) return const Center(child: Text('Bible data is unavailable. Please rebuild the app.'));
       if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-      return GridView.builder(padding: const EdgeInsets.all(20), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: snap.data!, itemBuilder: (context, i) => InkWell(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BibleReader(book: book, chapter: i + 1))), child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE8D6CD))), child: Center(child: Text('${i + 1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: wine))))));
+      return GridView.builder(padding: const EdgeInsets.all(20), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: snap.data!, itemBuilder: (context, i) => InkWell(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BibleReader(book: book, chapter: i + 1))), child: Container(decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Center(child: Text('${i + 1}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary))))));
     }),
   );
 }
@@ -230,9 +289,9 @@ class _BibleReaderState extends State<BibleReader> {
       return ListView.builder(padding: const EdgeInsets.fromLTRB(20, 18, 20, 40), itemCount: snap.data!.length, itemBuilder: (context, i) {
         final verse = snap.data![i];
         return Padding(padding: const EdgeInsets.only(bottom: 16), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Padding(padding: const EdgeInsets.only(top: 3, right: 12), child: Text(verse.key, style: const TextStyle(color: wine, fontWeight: FontWeight.bold))),
-          Expanded(child: Text(verse.value, style: const TextStyle(fontSize: 19, height: 1.65, color: Color(0xFF34251F)))),
-          IconButton(visualDensity: VisualDensity.compact, onPressed: () => saveVerse(verse.key, verse.value), icon: const Icon(Icons.bookmark_add_outlined, color: wine, size: 20), tooltip: 'Save verse'),
+          Padding(padding: const EdgeInsets.only(top: 3, right: 12), child: Text(verse.key, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold))),
+          Expanded(child: Text(verse.value, style: TextStyle(fontSize: 19, height: 1.65, color: Theme.of(context).colorScheme.onSurface))),
+          IconButton(visualDensity: VisualDensity.compact, onPressed: () => saveVerse(verse.key, verse.value), icon: Icon(Icons.bookmark_add_outlined, color: Theme.of(context).colorScheme.primary, size: 20), tooltip: 'Save verse'),
         ]));
       });
     }),
@@ -277,7 +336,7 @@ class _SavedVersesState extends State<SavedVerses> {
       if (!snap.hasData) return const Center(child: CircularProgressIndicator());
       final items = snap.data!;
       if (items.isEmpty) return const Center(child: Text('Your saved verses will appear here.'));
-      return ListView.builder(itemCount: items.length, itemBuilder: (context, i) => ListTile(leading: const Icon(Icons.bookmark, color: wine), title: Text(items[i]['reference']!), subtitle: Text(items[i]['text']!), trailing: IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Remove saved verse', onPressed: () => removeAt(i))));
+      return ListView.builder(itemCount: items.length, itemBuilder: (context, i) => ListTile(leading: Icon(Icons.bookmark, color: Theme.of(context).colorScheme.primary), title: Text(items[i]['reference']!), subtitle: Text(items[i]['text']!), trailing: IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Remove saved verse', onPressed: () => removeAt(i))));
     }),
   );
 }
@@ -287,11 +346,11 @@ class AboutPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(24), children: [
     const SizedBox(height: 24), const Center(child: NeroMark(size: 92)), const SizedBox(height: 16),
-    const Center(child: Text('NERO', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: wine, letterSpacing: 2))),
+    Center(child: Text('NERO', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary, letterSpacing: 2))),
     const Center(child: Text('Read, Reflect & Grow', style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))),
     const SizedBox(height: 24), const Text('NERO is an offline Bible reader containing the complete 66-book King James Version. Read, search, and save verses directly on your device.', textAlign: TextAlign.center, style: TextStyle(height: 1.6)),
-    const SizedBox(height: 16), const ListTile(leading: Icon(Icons.wifi_off, color: wine), title: Text('Works offline'), subtitle: Text('Bible reading and search do not require an internet connection after installation.')),
-    const ListTile(leading: Icon(Icons.bookmark, color: wine), title: Text('Saved on your device'), subtitle: Text('Your saved verses remain on this device.')),
+    const SizedBox(height: 16), ListTile(leading: Icon(Icons.wifi_off, color: Theme.of(context).colorScheme.primary), title: Text('Works offline'), subtitle: Text('Bible reading and search do not require an internet connection after installation.')),
+    ListTile(leading: Icon(Icons.bookmark, color: Theme.of(context).colorScheme.primary), title: Text('Saved on your device'), subtitle: Text('Your saved verses remain on this device.')),
   ]);
 }
 
@@ -313,7 +372,7 @@ class BibleSearchDelegate extends SearchDelegate<String> {
         if (hits.isEmpty) return const Center(child: Text('No matching verses found.'));
         return ListView.builder(itemCount: hits.length, itemBuilder: (context, i) {
           final hit = hits[i];
-          return ListTile(leading: const Icon(Icons.menu_book, color: wine), title: Text(hit.reference, style: const TextStyle(fontWeight: FontWeight.bold, color: wine)), subtitle: Text(hit.text, maxLines: 3, overflow: TextOverflow.ellipsis), onTap: () { close(context, hit.reference); Navigator.push(context, MaterialPageRoute(builder: (_) => BibleReader(book: hit.book, chapter: hit.chapter))); });
+          return ListTile(leading: Icon(Icons.menu_book, color: Theme.of(context).colorScheme.primary), title: Text(hit.reference, style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)), subtitle: Text(hit.text, maxLines: 3, overflow: TextOverflow.ellipsis), onTap: () { close(context, hit.reference); Navigator.push(context, MaterialPageRoute(builder: (_) => BibleReader(book: hit.book, chapter: hit.chapter))); });
         });
       },
     );
