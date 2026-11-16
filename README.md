@@ -1,20 +1,33 @@
-NERO OFFLINE BIBLE — REPLACEMENT FILES
+# NERO Offline Bible
 
-This ZIP contains two corrected project files. It is not a complete copy of the app.
+NERO is an English-language, offline King James Version (KJV) Bible reader for Android.
 
-1. Open your Nero GitHub repository.
-2. Replace tool/download_kjv.py with the file in this ZIP.
-3. Create .github/workflows/build_nero.yml and paste/use the workflow file in this ZIP.
-4. Keep your existing pubspec.yaml, lib/main.dart, logo, and banner files unchanged.
-5. Confirm the existing banner is at assets/icon/images/bible_banner.png and launcher icon is at assets/icon/nero_launcher.png.
-6. In GitHub repository Settings > Secrets and variables > Actions, make sure these secrets exist:
-   - SUPABASE_URL
-   - SUPABASE_ANON_KEY
-7. Commit the two replacement files to main. The workflow will download all 66 KJV books during the build and bundle them into the APK.
-8. Open Actions > Build NERO Android APK and download the NERO-Android-APK artifact when it succeeds.
+## Features
 
-OFFLINE BEHAVIOUR
-The KJV text is bundled inside the APK, so Bible reading does not need mobile data or Wi-Fi after installation. Supabase registration, email verification, sign-in, and sign-out still need an internet connection.
+- All 66 books of the King James Version are downloaded during the GitHub Actions build and bundled inside the Android application.
+- Read books, chapters, and verses without an internet connection after installation.
+- Search the text of the Bible offline.
+- Save and remove favourite verses. Saved verses are stored locally on the device.
+- Original NERO red-and-white visual theme, banner, and launcher artwork are retained.
+- No Supabase, Firebase, account registration, email verification, or online sign-in is used.
+- All application interface text is English.
 
-IMPORTANT
-Do not delete or replace lib/main.dart, pubspec.yaml, or your existing artwork with this ZIP. The ZIP only contains the two corrected replacement files and these instructions.
+## Build the Android APK
+
+1. Open the `NeroBank/Nero` GitHub repository.
+2. Open **Actions**.
+3. Select **Build NERO Offline Android APK**.
+4. Select **Run workflow** and confirm.
+5. When the workflow succeeds, open its run and download the `NERO-Offline-Android-APK` artifact.
+6. Extract the artifact ZIP and install the APK on the Android device.
+
+The workflow downloads and validates all 66 KJV books before building. The Bible text is bundled in the APK; internet access is needed only during the build to obtain the source data and dependencies.
+
+## Artwork locations
+
+- Home banner: `assets/images/bible_banner.png`
+- Launcher icon and in-app mark: `assets/images/icon/nero_launcher.png`
+
+## Local development
+
+Run `python tool/download_kjv.py`, then `flutter pub get`, `dart run flutter_launcher_icons`, and `flutter build apk --release`.
