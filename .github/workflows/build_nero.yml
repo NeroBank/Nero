@@ -1,4 +1,3 @@
-
 name: Build NERO Offline Android APK
 
 on:
@@ -94,6 +93,39 @@ jobs:
               .
           fi
           test -f android/gradlew
+
+      - name: Set launcher app name to Nero
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          manifest = Path(
+              "android/app/src/main/AndroidManifest.xml"
+          )
+
+          content = manifest.read_text(encoding="utf-8")
+
+          updated, count = re.subn(
+              r'(<application\b[^>]*\bandroid:label=")[^"]*(")',
+              r'\g<1>Nero\g<2>',
+              content,
+              count=1,
+              flags=re.DOTALL
+          )
+
+          if count != 1:
+              raise SystemExit(
+                  "Could not find the application label in AndroidManifest.xml"
+              )
+
+          manifest.write_text(updated, encoding="utf-8")
+
+          if 'android:label="Nero"' not in updated:
+              raise SystemExit("Launcher name verification failed.")
+
+          print("Launcher app name successfully set to Nero.")
+          PY
 
       - name: Download all 66 KJV books
         run: python tool/download_kjv.py
