@@ -11,6 +11,9 @@ const Color darkBackground = Color(0xFF171315);
 const Color darkSurface = Color(0xFF251D20);
 const Color darkText = Color(0xFFF5EDEF);
 
+/// Notifies the Saved page whenever the local saved-verse list changes.
+final ValueNotifier<int> savedVersesRevision = ValueNotifier<int>(0);
+
 const List<String> bibleBooks = [
   'Genesis','Exodus','Leviticus','Numbers','Deuteronomy','Joshua','Judges','Ruth',
   '1 Samuel','2 Samuel','1 Kings','2 Kings','1 Chronicles','2 Chronicles','Ezra',
@@ -158,14 +161,14 @@ class _Dashboard extends StatelessWidget {
       const Padding(padding: EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('WELCOME TO NERO', style: TextStyle(color: gold, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
         SizedBox(height: 6), Text('Read, Reflect & Grow', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold)),
-        Text('Your daily companion in God’s Word', style: TextStyle(color: Colors.white)),
+        Text('Your daily companion in God鈥檚 Word', style: TextStyle(color: Colors.white)),
       ])),
     ])),
     const SizedBox(height: 18),
     Text('VERSE OF THE DAY', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
     const SizedBox(height: 8),
     Card(color: Theme.of(context).colorScheme.surfaceContainerHighest, elevation: 0, child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('“The LORD is my shepherd; I shall not want.”', style: TextStyle(fontSize: 21, height: 1.45, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
+      Text('鈥淭he LORD is my shepherd; I shall not want.鈥�', style: TextStyle(fontSize: 21, height: 1.45, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
       const SizedBox(height: 8), Text('PSALM 23:1', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
     ]))),
     const SizedBox(height: 18),
@@ -272,13 +275,50 @@ class _BibleReaderState extends State<BibleReader> {
     throw const FormatException('Bible chapter data is unavailable.');
   }
   Future<void> saveVerse(String number, String text) async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList('nero_saved_verses') ?? [];
-    final reference = '${widget.book} ${widget.chapter}:$number';
-    final item = jsonEncode({'reference': reference, 'text': text});
-    if (!list.any((saved) { try { return jsonDecode(saved)['reference'] == reference; } catch (_) { return false; } })) list.add(item);
-    await prefs.setStringList('nero_saved_verses', list);
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verse saved to your device.')));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList('nero_saved_verses') ?? [];
+      final reference = '${widget.book} ${widget.chapter}:$number';
+      final item = jsonEncode({'reference': reference, 'text': text});
+
+      final alreadySaved = list.any((saved) {
+        try {
+          final decoded = jsonDecode(saved);
+          return decoded is Map && decoded['reference'] == reference;
+        } catch (_) {
+          return saved.startsWith('$reference|');
+        }
+      });
+
+      if (!alreadySaved) {
+        list.add(item);
+      }
+
+      final success = await prefs.setStringList('nero_saved_verses', list);
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not save this verse. Please try again.')),
+          );
+        }
+        return;
+      }
+
+      savedVersesRevision.value++;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(alreadySaved ? 'This verse is already saved.' : 'Verse saved to your device.'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save this verse. Please try again.')),
+        );
+      }
+    }
   }
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -308,36 +348,113 @@ class _SavedVersesState extends State<SavedVerses> {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList('nero_saved_verses') ?? [];
     final result = <Map<String, String>>[];
+
     for (final item in raw) {
       try {
         final decoded = jsonDecode(item);
-        if (decoded is Map) result.add({'reference': decoded['reference'].toString(), 'text': decoded['text'].toString()});
+        if (decoded is Map &&
+            decoded['reference'] is String &&
+            decoded['text'] is String) {
+          result.add({
+            'reference': decoded['reference'] as String,
+            'text': decoded['text'] as String,
+          });
+        }
       } catch (_) {
+        // Read the older reference|text format for compatibility.
         final parts = item.split('|');
-        if (parts.length >= 2) result.add({'reference': parts.first, 'text': parts.skip(1).join('|')});
+        if (parts.length >= 2) {
+          result.add({
+            'reference': parts.first,
+            'text': parts.skip(1).join('|'),
+          });
+        }
       }
     }
     return result;
   }
+
   Future<void> removeAt(int index) async {
-    final prefs = await SharedPreferences.getInstance();
-    final items = prefs.getStringList('nero_saved_verses') ?? [];
-    final saved = await getSaved();
-    if (index < saved.length) {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final items = prefs.getStringList('nero_saved_verses') ?? [];
+      final saved = await getSaved();
+
+      if (index < 0 || index >= saved.length) return;
+
       final reference = saved[index]['reference'];
-      items.removeWhere((item) { try { return jsonDecode(item)['reference'] == reference; } catch (_) { return item.startsWith('$reference|'); } });
-      await prefs.setStringList('nero_saved_verses', items);
-      if (mounted) setState(() {});
+      items.removeWhere((item) {
+        try {
+          final decoded = jsonDecode(item);
+          return decoded is Map && decoded['reference'] == reference;
+        } catch (_) {
+          return item.startsWith('$reference|');
+        }
+      });
+
+      final success = await prefs.setStringList('nero_saved_verses', items);
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not remove this saved verse. Please try again.')),
+          );
+        }
+        return;
+      }
+
+      savedVersesRevision.value++;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update saved verses. Please try again.')),
+        );
+      }
     }
   }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: FutureBuilder<List<Map<String, String>>>(future: getSaved(), builder: (context, snap) {
-      if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-      final items = snap.data!;
-      if (items.isEmpty) return const Center(child: Text('Your saved verses will appear here.'));
-      return ListView.builder(itemCount: items.length, itemBuilder: (context, i) => ListTile(leading: Icon(Icons.bookmark, color: Theme.of(context).colorScheme.primary), title: Text(items[i]['reference']!), subtitle: Text(items[i]['text']!), trailing: IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Remove saved verse', onPressed: () => removeAt(i))));
-    }),
+    body: ValueListenableBuilder<int>(
+      valueListenable: savedVersesRevision,
+      builder: (context, revision, child) => FutureBuilder<List<Map<String, String>>>(
+        key: ValueKey<int>(revision),
+        future: getSaved(),
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return const Center(
+              child: Text('Saved verses could not be loaded. Please try again.'),
+            );
+          }
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final items = snap.data!;
+          if (items.isEmpty) {
+            return const Center(
+              child: Text('Your saved verses will appear here.'),
+            );
+          }
+
+          return ListView.builder(
+            itemCount: items.length,
+            itemBuilder: (context, i) => ListTile(
+              leading: Icon(
+                Icons.bookmark,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: Text(items[i]['reference']!),
+              subtitle: Text(items[i]['text']!),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: 'Remove saved verse',
+                onPressed: () => removeAt(i),
+              ),
+            ),
+          );
+        },
+      ),
+    ),
   );
 }
 
