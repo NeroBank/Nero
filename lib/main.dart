@@ -142,7 +142,16 @@ class _BibleLibraryState extends State<BibleLibrary> {
   Widget build(BuildContext context) {
     final books = bibleBooks.where((b) => b.toLowerCase().contains(filter.trim().toLowerCase())).toList();
     return Column(children: [
-      Padding(padding: const EdgeInsets.all(16), child: TextField(onChanged: (v) => setState(() => filter = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Find a book')),
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: TextField(
+          onChanged: (value) => setState(() => filter = value),
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search),
+            hintText: 'Find a book',
+          ),
+        ),
+      ),
       Expanded(child: ListView.builder(itemCount: books.length, itemBuilder: (context, i) {
         final book = books[i];
         return ListTile(leading: CircleAvatar(backgroundColor: wine.withOpacity(.1), child: const Icon(Icons.menu_book, color: wine)), title: Text(book, style: const TextStyle(fontWeight: FontWeight.w600)), subtitle: Text(bibleBooks.indexOf(book) < 39 ? 'Old Testament' : 'New Testament'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChapterPicker(book: book))));
