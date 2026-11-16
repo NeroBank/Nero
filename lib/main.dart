@@ -161,14 +161,14 @@ class _Dashboard extends StatelessWidget {
       const Padding(padding: EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('WELCOME TO NERO', style: TextStyle(color: gold, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
         SizedBox(height: 6), Text('Read, Reflect & Grow', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold)),
-        Text('Your daily companion in God鈥檚 Word', style: TextStyle(color: Colors.white)),
+        Text('Your daily companion in God's Word', style: TextStyle(color: Colors.white)),
       ])),
     ])),
     const SizedBox(height: 18),
     Text('VERSE OF THE DAY', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
     const SizedBox(height: 8),
     Card(color: Theme.of(context).colorScheme.surfaceContainerHighest, elevation: 0, child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('鈥淭he LORD is my shepherd; I shall not want.鈥�', style: TextStyle(fontSize: 21, height: 1.45, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
+      Text('"The LORD is my shepherd; I shall not want."', style: TextStyle(fontSize: 21, height: 1.45, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
       const SizedBox(height: 8), Text('PSALM 23:1', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
     ]))),
     const SizedBox(height: 18),
