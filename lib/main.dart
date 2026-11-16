@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 const Color wine = Color(0xFF8E1019);
 const Color deepWine = Color(0xFF57070D);
@@ -21,15 +20,8 @@ const List<String> bibleBooks = [
   'Hebrews','James','1 Peter','2 Peter','1 John','2 John','3 John','Jude','Revelation'
 ];
 
-SupabaseClient? get sb => Supabase.instance.isInitialized ? Supabase.instance.client : null;
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  const url = String.fromEnvironment('SUPABASE_URL');
-  const anon = String.fromEnvironment('SUPABASE_ANON_KEY');
-  if (url.isNotEmpty && anon.isNotEmpty) {
-    await Supabase.initialize(url: url, anonKey: anon);
-  }
   runApp(const NeroApp());
 }
 
@@ -37,11 +29,9 @@ class NeroApp extends StatelessWidget {
   const NeroApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'NERO',
-    debugShowCheckedModeBanner: false,
+    title: 'NERO', debugShowCheckedModeBanner: false,
     theme: ThemeData(
-      useMaterial3: true,
-      scaffoldBackgroundColor: paper,
+      useMaterial3: true, scaffoldBackgroundColor: paper,
       colorScheme: ColorScheme.fromSeed(seedColor: wine, primary: wine, secondary: gold),
       appBarTheme: const AppBarTheme(backgroundColor: wine, foregroundColor: Colors.white, centerTitle: true),
       inputDecorationTheme: InputDecorationTheme(
@@ -50,39 +40,7 @@ class NeroApp extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
     ),
-    home: const AuthGate(),
-  );
-}
-
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
-  @override
-  Widget build(BuildContext context) {
-    if (sb == null) return const SetupScreen();
-    return StreamBuilder<AuthState>(
-      stream: sb!.auth.onAuthStateChange,
-      builder: (context, snap) {
-        final user = sb!.auth.currentUser;
-        if (user == null) return const WelcomeScreen();
-        return NeroHome(user: user);
-      },
-    );
-  }
-}
-
-class SetupScreen extends StatelessWidget {
-  const SetupScreen({super.key});
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Center(child: Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const NeroMark(size: 100), const SizedBox(height: 18),
-        const Text('NERO', style: TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: wine)),
-        const SizedBox(height: 12),
-        const Text('Supabase is not configured yet. Add your Supabase project URL and publishable/anon key to the GitHub Actions secrets, then build with the workflow.', textAlign: TextAlign.center),
-      ]),
-    )),
+    home: const NeroHome(),
   );
 }
 
@@ -92,124 +50,12 @@ class NeroMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: BorderRadius.circular(size * .18),
-    child: Image.asset('assets/icon/nero_launcher.png', width: size, height: size, fit: BoxFit.cover),
-  );
-}
-
-class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({super.key});
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Stack(fit: StackFit.expand, children: [
-      Image.asset('assets/images/bible_banner.png', fit: BoxFit.cover),
-      Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withOpacity(.12), deepWine.withOpacity(.96)], stops: const [0.15, 1]))),
-      SafeArea(child: Padding(
-        padding: const EdgeInsets.fromLTRB(26, 32, 26, 30),
-        child: Column(children: [
-          const Spacer(),
-          const NeroMark(size: 104),
-          const SizedBox(height: 12),
-          const Text('NERO', style: TextStyle(fontSize: 48, color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 3)),
-          const Text('Read, Reflect & Grow', style: TextStyle(color: Colors.white, fontSize: 18, fontStyle: FontStyle.italic)),
-          const SizedBox(height: 14),
-          const Text("Discover God's Word. Change Your Life.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 16)),
-          const SizedBox(height: 34),
-          _WideButton(text: 'Create Account', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthForm(register: true)))),
-          const SizedBox(height: 12),
-          _WideButton(text: 'Sign In', light: true, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthForm(register: false)))),
-          const SizedBox(height: 18),
-          TextButton(onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NeroHome(guest: true))), child: const Text('Continue as Guest', style: TextStyle(color: Colors.white))),
-        ]),
-      )),
-    ]),
-  );
-}
-
-class _WideButton extends StatelessWidget {
-  final String text; final VoidCallback onTap; final bool light;
-  const _WideButton({required this.text, required this.onTap, this.light = false});
-  @override
-  Widget build(BuildContext context) => SizedBox(width: double.infinity, height: 54, child: FilledButton(
-    style: FilledButton.styleFrom(backgroundColor: light ? Colors.white : const Color(0xFFC51D25), foregroundColor: light ? wine : Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
-    onPressed: onTap, child: Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-  ));
-}
-
-class AuthForm extends StatefulWidget {
-  final bool register;
-  const AuthForm({super.key, required this.register});
-  @override
-  State<AuthForm> createState() => _AuthFormState();
-}
-class _AuthFormState extends State<AuthForm> {
-  final name = TextEditingController(), email = TextEditingController(), password = TextEditingController(), confirm = TextEditingController();
-  bool busy = false, obscure = true;
-  String? error;
-  @override
-  void dispose() { name.dispose(); email.dispose(); password.dispose(); confirm.dispose(); super.dispose(); }
-  Future<void> submit() async {
-    if (sb == null) { setState(() => error = 'Online sign-in is not configured.'); return; }
-    if (widget.register && password.text != confirm.text) { setState(() => error = 'Passwords do not match.'); return; }
-    if (password.text.length < 6) { setState(() => error = 'Password must contain at least 6 characters.'); return; }
-    setState(() { busy = true; error = null; });
-    try {
-      if (widget.register) {
-        final res = await sb!.auth.signUp(email: email.text.trim(), password: password.text, data: {'full_name': name.text.trim()});
-        if (!mounted) return;
-        if (res.session == null) {
-          _message('Account request received. Check your email to verify your account before signing in.');
-          Navigator.pop(context);
-        } else {
-          _message('Your account has been created.');
-          Navigator.pop(context);
-        }
-      } else {
-        await sb!.auth.signInWithPassword(email: email.text.trim(), password: password.text);
-        if (!mounted) return;
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => NeroHome(user: sb!.auth.currentUser)),
-          (route) => false,
-        );
-      }
-    } on AuthException catch (e) {
-      if (mounted) setState(() => error = e.message);
-    } catch (_) {
-      if (mounted) setState(() => error = 'Unable to connect. Check your internet connection and try again.');
-    } finally { if (mounted) setState(() => busy = false); }
-  }
-  void _message(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.register ? 'Create Account' : 'Sign In')),
-    body: ListView(padding: const EdgeInsets.all(24), children: [
-      const Center(child: NeroMark(size: 76)), const SizedBox(height: 20),
-      if (widget.register) ...[
-        TextField(controller: name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(prefixIcon: Icon(Icons.person_outline), hintText: 'Full Name')),
-        const SizedBox(height: 12),
-      ],
-      TextField(controller: email, keyboardType: TextInputType.emailAddress, autocorrect: false, decoration: const InputDecoration(prefixIcon: Icon(Icons.email_outlined), hintText: 'Email Address')),
-      const SizedBox(height: 12),
-      TextField(controller: password, obscureText: obscure, decoration: InputDecoration(prefixIcon: const Icon(Icons.lock_outline), hintText: 'Password', suffixIcon: IconButton(onPressed: () => setState(() => obscure = !obscure), icon: Icon(obscure ? Icons.visibility : Icons.visibility_off)))),
-      if (widget.register) ...[
-        const SizedBox(height: 12),
-        TextField(controller: confirm, obscureText: true, decoration: const InputDecoration(prefixIcon: Icon(Icons.lock_outline), hintText: 'Confirm Password')),
-      ],
-      if (!widget.register) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () async {
-        if (email.text.trim().isEmpty) { setState(() => error = 'Enter your email address first.'); return; }
-        try { await sb!.auth.resetPasswordForEmail(email.text.trim()); if (mounted) _message('Password reset email sent.'); } catch (_) { if (mounted) setState(() => error = 'Could not send reset email.'); }
-      }, child: const Text('Forgot Password?'))),
-      if (error != null) Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(error!, style: const TextStyle(color: Colors.red))),
-      const SizedBox(height: 12),
-      _WideButton(text: busy ? 'Please wait...' : (widget.register ? 'Register' : 'Sign In'), onTap: busy ? () {} : submit),
-      const SizedBox(height: 14),
-      Center(child: TextButton(onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => AuthForm(register: !widget.register))), child: Text(widget.register ? 'Already have an account? Sign In' : "Don't have an account? Create Account"))),
-    ]),
+    child: Image.asset('assets/images/icon/nero_launcher.png', width: size, height: size, fit: BoxFit.cover),
   );
 }
 
 class NeroHome extends StatefulWidget {
-  final User? user; final bool guest;
-  const NeroHome({super.key, this.user, this.guest = false});
+  const NeroHome({super.key});
   @override
   State<NeroHome> createState() => _NeroHomeState();
 }
@@ -217,19 +63,17 @@ class _NeroHomeState extends State<NeroHome> {
   int tab = 0;
   @override
   Widget build(BuildContext context) {
-    final pages = [
+    final pages = <Widget>[
       _Dashboard(onRead: () => setState(() => tab = 1)),
-      const BibleLibrary(),
-      const SavedVerses(),
-      AccountPage(guest: widget.guest),
+      const BibleLibrary(), const SavedVerses(), const AboutPage(),
     ];
     return Scaffold(
       appBar: AppBar(
         leading: const Padding(padding: EdgeInsets.all(10), child: NeroMark(size: 36)),
         title: const Text('NERO', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
-        actions: [IconButton(onPressed: () => showSearch(context: context, delegate: BibleSearchDelegate()), icon: const Icon(Icons.search))],
+        actions: [IconButton(onPressed: () => showSearch(context: context, delegate: BibleSearchDelegate()), icon: const Icon(Icons.search), tooltip: 'Search the Bible')],
       ),
-      body: pages[tab],
+      body: IndexedStack(index: tab, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: tab, onDestinationSelected: (i) => setState(() => tab = i),
         indicatorColor: gold.withOpacity(.25),
@@ -237,7 +81,7 @@ class _NeroHomeState extends State<NeroHome> {
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book), label: 'Bible'),
           NavigationDestination(icon: Icon(Icons.bookmark_border), selectedIcon: Icon(Icons.bookmark), label: 'Saved'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Account'),
+          NavigationDestination(icon: Icon(Icons.info_outline), selectedIcon: Icon(Icons.info), label: 'About'),
         ],
       ),
     );
@@ -279,6 +123,7 @@ class _Dashboard extends StatelessWidget {
     Text('Explore all 66 books of the King James Version, from Genesis to Revelation.', style: TextStyle(color: Colors.brown.shade700, height: 1.4)),
   ]);
 }
+
 class _QuickTile extends StatelessWidget {
   final IconData icon; final String title; final VoidCallback onTap;
   const _QuickTile({required this.icon, required this.title, required this.onTap});
@@ -295,12 +140,12 @@ class _BibleLibraryState extends State<BibleLibrary> {
   String filter = '';
   @override
   Widget build(BuildContext context) {
-    final books = bibleBooks.where((b) => b.toLowerCase().contains(filter.toLowerCase())).toList();
+    final books = bibleBooks.where((b) => b.toLowerCase().contains(filter.trim().toLowerCase())).toList();
     return Column(children: [
-      Padding(padding: const EdgeInsets.all(16), child: TextField(onChanged: (v) => setState(() => filter = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search books of the Bible'))),
+      Padding(padding: const EdgeInsets.all(16), child: TextField(onChanged: (v) => setState(() => filter = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Find a book')),
       Expanded(child: ListView.builder(itemCount: books.length, itemBuilder: (context, i) {
         final book = books[i];
-        return ListTile(leading: CircleAvatar(backgroundColor: wine.withOpacity(.1), child: const Icon(Icons.menu_book, color: wine)), title: Text(book, style: const TextStyle(fontWeight: FontWeight.w600)), subtitle: Text(i < 39 ? 'Old Testament' : 'New Testament'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChapterPicker(book: book))));
+        return ListTile(leading: CircleAvatar(backgroundColor: wine.withOpacity(.1), child: const Icon(Icons.menu_book, color: wine)), title: Text(book, style: const TextStyle(fontWeight: FontWeight.w600)), subtitle: Text(bibleBooks.indexOf(book) < 39 ? 'Old Testament' : 'New Testament'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChapterPicker(book: book))));
       })),
     ]);
   }
@@ -310,18 +155,19 @@ class ChapterPicker extends StatelessWidget {
   final String book;
   const ChapterPicker({super.key, required this.book});
   Future<int> count() async {
-    try {
-      final raw = jsonDecode(await rootBundle.loadString('assets/bible/${_fileName(book)}.json')) as Map<String,dynamic>;
-      final chapters = raw['chapters'];
-      return chapters is List ? chapters.length : (chapters as Map).length;
-    } catch (_) { return _fallbackChapters[book] ?? 1; }
+    final raw = jsonDecode(await rootBundle.loadString('assets/bible/${_fileName(book)}.json')) as Map<String, dynamic>;
+    final chapters = raw['chapters'];
+    if (chapters is Map) return chapters.length;
+    if (chapters is List) return chapters.length;
+    throw const FormatException('Invalid chapter data');
   }
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(book)),
     body: FutureBuilder<int>(future: count(), builder: (context, snap) {
-      final n = snap.data ?? _fallbackChapters[book] ?? 1;
-      return GridView.builder(padding: const EdgeInsets.all(20), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: n, itemBuilder: (context, i) => InkWell(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BibleReader(book: book, chapter: i+1))), child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE8D6CD))), child: Center(child: Text('${i+1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: wine))))));
+      if (snap.hasError) return const Center(child: Text('Bible data is unavailable. Please rebuild the app.'));
+      if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+      return GridView.builder(padding: const EdgeInsets.all(20), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: snap.data!, itemBuilder: (context, i) => InkWell(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BibleReader(book: book, chapter: i + 1))), child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE8D6CD))), child: Center(child: Text('${i + 1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: wine))))));
     }),
   );
 }
@@ -333,41 +179,53 @@ class BibleReader extends StatefulWidget {
   State<BibleReader> createState() => _BibleReaderState();
 }
 class _BibleReaderState extends State<BibleReader> {
-  late Future<List<String>> verses;
+  late Future<List<MapEntry<String, String>>> verses;
   @override
   void initState() { super.initState(); verses = load(); }
-  Future<List<String>> load() async {
-    final data = jsonDecode(await rootBundle.loadString('assets/bible/${_fileName(widget.book)}.json')) as Map<String,dynamic>;
+  Future<List<MapEntry<String, String>>> load() async {
+    final data = jsonDecode(await rootBundle.loadString('assets/bible/${_fileName(widget.book)}.json')) as Map<String, dynamic>;
     final chapters = data['chapters'];
-    dynamic selected;
-    if (chapters is List) selected = chapters[widget.chapter-1];
-    else selected = chapters['${widget.chapter}'];
-    if (selected is List) return selected.map((e) => e is Map ? (e['text'] ?? e['verse'] ?? '').toString() : e.toString()).toList();
+    dynamic selected = chapters is List ? chapters[widget.chapter - 1] : (chapters as Map)[widget.chapter.toString()];
+    if (selected is Map && selected['verses'] != null) selected = selected['verses'];
     if (selected is Map) {
-      final keys = selected.keys.toList()..sort((a,b) => int.parse(a.toString()).compareTo(int.parse(b.toString())));
-      return keys.map((k) => selected[k].toString()).toList();
+      final keys = selected.keys.toList()..sort((a, b) => int.parse(a.toString()).compareTo(int.parse(b.toString())));
+      return keys.map((key) {
+        final value = selected[key];
+        final text = value is Map ? (value['text'] ?? value['verse_text'] ?? '').toString() : value.toString();
+        return MapEntry(key.toString(), text);
+      }).toList();
     }
-    throw Exception('Bible chapter data is unavailable.');
+    if (selected is List) return selected.asMap().entries.map((entry) {
+      final value = entry.value;
+      final text = value is Map ? (value['text'] ?? value['verse_text'] ?? '').toString() : value.toString();
+      final number = value is Map ? (value['verse'] ?? entry.key + 1).toString() : (entry.key + 1).toString();
+      return MapEntry(number, text);
+    }).toList();
+    throw const FormatException('Bible chapter data is unavailable.');
   }
-  Future<void> saveVerse(int index, String text) async {
+  Future<void> saveVerse(String number, String text) async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('nero_saved_verses') ?? [];
-    final item = '${widget.book} ${widget.chapter}:${index+1}|$text';
-    if (!list.contains(item)) list.add(item);
+    final reference = '${widget.book} ${widget.chapter}:$number';
+    final item = jsonEncode({'reference': reference, 'text': text});
+    if (!list.any((saved) { try { return jsonDecode(saved)['reference'] == reference; } catch (_) { return false; } })) list.add(item);
     await prefs.setStringList('nero_saved_verses', list);
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verse saved.')));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verse saved to your device.')));
   }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text('${widget.book} ${widget.chapter}'), actions: [IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedVerses())), icon: const Icon(Icons.bookmark_border))]),
-    body: FutureBuilder<List<String>>(future: verses, builder: (context, snap) {
-      if (snap.hasError) return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('Bible text has not been downloaded into assets/bible yet. Run the included GitHub Actions workflow to download the complete KJV dataset.')));
+    appBar: AppBar(title: Text('${widget.book} ${widget.chapter}'), actions: [IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedVerses())), icon: const Icon(Icons.bookmark_border), tooltip: 'Saved verses')]),
+    body: FutureBuilder<List<MapEntry<String, String>>>(future: verses, builder: (context, snap) {
+      if (snap.hasError) return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('This chapter could not be loaded. Please rebuild the app with the complete KJV data.')));
       if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-      return ListView.builder(padding: const EdgeInsets.fromLTRB(20, 18, 20, 40), itemCount: snap.data!.length, itemBuilder: (context, i) => Padding(padding: const EdgeInsets.only(bottom: 16), child: InkWell(onLongPress: () => saveVerse(i, snap.data![i]), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.only(top: 3, right: 12), child: Text('${i+1}', style: const TextStyle(color: wine, fontWeight: FontWeight.bold))),
-        Expanded(child: Text(snap.data![i], style: const TextStyle(fontSize: 19, height: 1.65, color: Color(0xFF34251F)))),
-        IconButton(visualDensity: VisualDensity.compact, onPressed: () => saveVerse(i, snap.data![i]), icon: const Icon(Icons.bookmark_add_outlined, color: wine, size: 20)),
-      ]))));
+      return ListView.builder(padding: const EdgeInsets.fromLTRB(20, 18, 20, 40), itemCount: snap.data!.length, itemBuilder: (context, i) {
+        final verse = snap.data![i];
+        return Padding(padding: const EdgeInsets.only(bottom: 16), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(padding: const EdgeInsets.only(top: 3, right: 12), child: Text(verse.key, style: const TextStyle(color: wine, fontWeight: FontWeight.bold))),
+          Expanded(child: Text(verse.value, style: const TextStyle(fontSize: 19, height: 1.65, color: Color(0xFF34251F)))),
+          IconButton(visualDensity: VisualDensity.compact, onPressed: () => saveVerse(verse.key, verse.value), icon: const Icon(Icons.bookmark_add_outlined, color: wine, size: 20), tooltip: 'Save verse'),
+        ]));
+      });
     }),
   );
 }
@@ -378,68 +236,118 @@ class SavedVerses extends StatefulWidget {
   State<SavedVerses> createState() => _SavedVersesState();
 }
 class _SavedVersesState extends State<SavedVerses> {
-  Future<List<String>> getSaved() async => (await SharedPreferences.getInstance()).getStringList('nero_saved_verses') ?? [];
+  Future<List<Map<String, String>>> getSaved() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList('nero_saved_verses') ?? [];
+    final result = <Map<String, String>>[];
+    for (final item in raw) {
+      try {
+        final decoded = jsonDecode(item);
+        if (decoded is Map) result.add({'reference': decoded['reference'].toString(), 'text': decoded['text'].toString()});
+      } catch (_) {
+        final parts = item.split('|');
+        if (parts.length >= 2) result.add({'reference': parts.first, 'text': parts.skip(1).join('|')});
+      }
+    }
+    return result;
+  }
+  Future<void> removeAt(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    final items = prefs.getStringList('nero_saved_verses') ?? [];
+    final saved = await getSaved();
+    if (index < saved.length) {
+      final reference = saved[index]['reference'];
+      items.removeWhere((item) { try { return jsonDecode(item)['reference'] == reference; } catch (_) { return item.startsWith('$reference|'); } });
+      await prefs.setStringList('nero_saved_verses', items);
+      if (mounted) setState(() {});
+    }
+  }
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: FutureBuilder<List<String>>(future: getSaved(), builder: (context, snap) {
-      final items = snap.data ?? [];
+    body: FutureBuilder<List<Map<String, String>>>(future: getSaved(), builder: (context, snap) {
       if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+      final items = snap.data!;
       if (items.isEmpty) return const Center(child: Text('Your saved verses will appear here.'));
-      return ListView.builder(itemCount: items.length, itemBuilder: (context, i) => ListTile(leading: const Icon(Icons.bookmark, color: wine), title: Text(items[i].split('|').first), subtitle: Text(items[i].split('|').skip(1).join('|')), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { final p = await SharedPreferences.getInstance(); items.removeAt(i); await p.setStringList('nero_saved_verses', items); setState(() {}); })));
+      return ListView.builder(itemCount: items.length, itemBuilder: (context, i) => ListTile(leading: const Icon(Icons.bookmark, color: wine), title: Text(items[i]['reference']!), subtitle: Text(items[i]['text']!), trailing: IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Remove saved verse', onPressed: () => removeAt(i))));
     }),
   );
 }
 
-class AccountPage extends StatelessWidget {
-  final bool guest;
-  const AccountPage({super.key, this.guest = false});
+class AboutPage extends StatelessWidget {
+  const AboutPage({super.key});
   @override
-  Widget build(BuildContext context) {
-    final user = sb?.auth.currentUser;
-    return ListView(padding: const EdgeInsets.all(20), children: [
-      const SizedBox(height: 20), const Center(child: NeroMark(size: 88)), const SizedBox(height: 12),
-      Center(child: Text(user?.userMetadata?['full_name']?.toString() ?? (guest ? 'Guest Reader' : 'NERO Reader'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold))),
-      Center(child: Text(user?.email ?? 'Read and reflect in the KJV Bible')),
-      const SizedBox(height: 26),
-      if (user != null) ListTile(leading: const Icon(Icons.verified_user, color: wine), title: const Text('Account status'), subtitle: Text(user.emailConfirmedAt == null ? 'Email verification pending' : 'Email verified')),
-      ListTile(leading: const Icon(Icons.info_outline, color: wine), title: const Text('About NERO'), subtitle: const Text('Read, Reflect & Grow • King James Version')),
-      const SizedBox(height: 16),
-      _WideButton(text: user == null ? 'Sign In' : 'Sign Out', light: user == null, onTap: () async {
-        if (user == null) { Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthForm(register: false))); }
-        else {
-          await sb!.auth.signOut();
-          if (context.mounted) {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-              (route) => false,
-            );
-          }
-        }
-      }),
-    ]);
-  }
+  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(24), children: [
+    const SizedBox(height: 24), const Center(child: NeroMark(size: 92)), const SizedBox(height: 16),
+    const Center(child: Text('NERO', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: wine, letterSpacing: 2))),
+    const Center(child: Text('Read, Reflect & Grow', style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))),
+    const SizedBox(height: 24), const Text('NERO is an offline Bible reader containing the complete 66-book King James Version. Read, search, and save verses directly on your device.', textAlign: TextAlign.center, style: TextStyle(height: 1.6)),
+    const SizedBox(height: 16), const ListTile(leading: Icon(Icons.wifi_off, color: wine), title: Text('Works offline'), subtitle: Text('Bible reading and search do not require an internet connection after installation.')),
+    const ListTile(leading: Icon(Icons.bookmark, color: wine), title: Text('Saved on your device'), subtitle: Text('Your saved verses remain on this device.')),
+  ]);
 }
 
 class BibleSearchDelegate extends SearchDelegate<String> {
-  @override String get searchFieldLabel => 'Search books or verse text';
-  @override List<Widget>? buildActions(BuildContext context) => [IconButton(onPressed: () => query = '', icon: const Icon(Icons.clear))];
+  @override String get searchFieldLabel => 'Search words or verses';
+  @override List<Widget>? buildActions(BuildContext context) => [IconButton(onPressed: () => query = '', icon: const Icon(Icons.clear), tooltip: 'Clear search')];
   @override Widget? buildLeading(BuildContext context) => IconButton(onPressed: () => close(context, ''), icon: const Icon(Icons.arrow_back));
   @override Widget buildResults(BuildContext context) => _searchResults(context);
   @override Widget buildSuggestions(BuildContext context) => _searchResults(context);
   Widget _searchResults(BuildContext context) {
-    final results = bibleBooks.where((b) => b.toLowerCase().contains(query.toLowerCase())).toList();
-    return ListView(children: results.map((b) => ListTile(title: Text(b), leading: const Icon(Icons.menu_book, color: wine), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChapterPicker(book: b)))).toList());
+    final term = query.trim().toLowerCase();
+    if (term.length < 2) return const Center(child: Text('Enter at least two letters to search the KJV Bible.'));
+    return FutureBuilder<List<_VerseHit>>(
+      future: _findVerses(term),
+      builder: (context, snap) {
+        if (snap.hasError) return const Center(child: Text('Search could not load the Bible text.'));
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final hits = snap.data!;
+        if (hits.isEmpty) return const Center(child: Text('No matching verses found.'));
+        return ListView.builder(itemCount: hits.length, itemBuilder: (context, i) {
+          final hit = hits[i];
+          return ListTile(leading: const Icon(Icons.menu_book, color: wine), title: Text(hit.reference, style: const TextStyle(fontWeight: FontWeight.bold, color: wine)), subtitle: Text(hit.text, maxLines: 3, overflow: TextOverflow.ellipsis), onTap: () { close(context, hit.reference); Navigator.push(context, MaterialPageRoute(builder: (_) => BibleReader(book: hit.book, chapter: hit.chapter))); });
+        });
+      },
+    );
   }
 }
 
+class _VerseHit {
+  final String book; final int chapter; final String verse; final String text;
+  const _VerseHit(this.book, this.chapter, this.verse, this.text);
+  String get reference => '$book $chapter:$verse';
+}
+
+Future<List<_VerseHit>> _findVerses(String term) async {
+  final hits = <_VerseHit>[];
+  for (final book in bibleBooks) {
+    final raw = jsonDecode(await rootBundle.loadString('assets/bible/${_fileName(book)}.json')) as Map<String, dynamic>;
+    final chapters = raw['chapters'];
+    final chapterKeys = chapters is Map ? chapters.keys.toList() : List.generate((chapters as List).length, (i) => (i + 1).toString());
+    chapterKeys.sort((a, b) => int.parse(a.toString()).compareTo(int.parse(b.toString())));
+    for (final chapterKey in chapterKeys) {
+      final chapterNumber = int.parse(chapterKey.toString());
+      final dynamic chapter = chapters is Map ? chapters[chapterKey] : chapters[chapterNumber - 1];
+      final dynamic source = chapter is Map && chapter['verses'] != null ? chapter['verses'] : chapter;
+      if (source is Map) {
+        final keys = source.keys.toList()..sort((a, b) => int.parse(a.toString()).compareTo(int.parse(b.toString())));
+        for (final key in keys) {
+          final value = source[key];
+          final text = value is Map ? (value['text'] ?? value['verse_text'] ?? '').toString() : value.toString();
+          if (text.toLowerCase().contains(term)) hits.add(_VerseHit(book, chapterNumber, key.toString(), text));
+          if (hits.length >= 300) return hits;
+        }
+      } else if (source is List) {
+        for (var i = 0; i < source.length; i++) {
+          final value = source[i];
+          final text = value is Map ? (value['text'] ?? value['verse_text'] ?? '').toString() : value.toString();
+          final number = value is Map ? (value['verse'] ?? i + 1).toString() : (i + 1).toString();
+          if (text.toLowerCase().contains(term)) hits.add(_VerseHit(book, chapterNumber, number, text));
+          if (hits.length >= 300) return hits;
+        }
+      }
+    }
+  }
+  return hits;
+}
+
 String _fileName(String book) => book.toLowerCase().replaceAll(' ', '_');
-const Map<String,int> _fallbackChapters = {
-  'Genesis':50,'Exodus':40,'Leviticus':27,'Numbers':36,'Deuteronomy':34,'Joshua':24,'Judges':21,'Ruth':4,
-  '1 Samuel':31,'2 Samuel':24,'1 Kings':22,'2 Kings':25,'1 Chronicles':29,'2 Chronicles':36,'Ezra':10,'Nehemiah':13,
-  'Esther':10,'Job':42,'Psalms':150,'Proverbs':31,'Ecclesiastes':12,'Song of Solomon':8,'Isaiah':66,'Jeremiah':52,
-  'Lamentations':5,'Ezekiel':48,'Daniel':12,'Hosea':14,'Joel':3,'Amos':9,'Obadiah':1,'Jonah':4,'Micah':7,'Nahum':3,
-  'Habakkuk':3,'Zephaniah':3,'Haggai':2,'Zechariah':14,'Malachi':4,'Matthew':28,'Mark':16,'Luke':24,'John':21,'Acts':28,
-  'Romans':16,'1 Corinthians':16,'2 Corinthians':13,'Galatians':6,'Ephesians':6,'Philippians':4,'Colossians':4,
-  '1 Thessalonians':5,'2 Thessalonians':3,'1 Timothy':6,'2 Timothy':4,'Titus':3,'Philemon':1,'Hebrews':13,'James':5,
-  '1 Peter':5,'2 Peter':3,'1 John':5,'2 John':1,'3 John':1,'Jude':1,'Revelation':22
-};
