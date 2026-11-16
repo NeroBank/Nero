@@ -2,236 +2,182 @@
 name: Build NERO Offline Android APK
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
       - master
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: nero-offline-${{ github.ref }}
+  group: nero-android-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build NERO Offline Bible
+    name: Build NERO Offline Bible APK
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
-      - name: Checkout NERO
+      - name: Check out NERO repository
         uses: actions/checkout@v4
 
-      - name: Install Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Check NERO project files
+      - name: Check required NERO files
         shell: bash
         run: |
           set -euo pipefail
 
           test -f pubspec.yaml
           test -f lib/main.dart
+          test -f tool/download_kjv.py
           test -f assets/images/bible_banner.png
-          test -f assets/icon/nero_launcher.png
+          test -f assets/images/icon/nero_launcher.png
 
-          echo "NERO project files found."
+          echo "All required NERO project files are present."
 
-      - name: Confirm Supabase is removed
+      - name: Check English-only app source
         shell: bash
         run: |
           set -euo pipefail
 
-          if grep -niE 'supabase_flutter|SupabaseClient|Supabase.initialize|SUPABASE_URL|SUPABASE_ANON_KEY' pubspec.yaml lib/main.dart; then
-            echo "ERROR: Supabase references remain."
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          files = [
+              Path("lib/main.dart"),
+              Path("pubspec.yaml"),
+              Path("tool/download_kjv.py"),
+          ]
+
+          pattern = re.compile(
+              r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]"
+          )
+
+          for file in files:
+              content = file.read_text(encoding="utf-8")
+              if pattern.search(content):
+                  raise SystemExit(
+                      f"Non-English characters found in {file}"
+                  )
+
+          print("English-only source check passed.")
+          PY
+
+      - name: Confirm Supabase and Firebase are removed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -niE \
+            'supabase|firebase|SUPABASE_URL|SUPABASE_ANON_KEY' \
+            pubspec.yaml lib/main.dart; then
+            echo "ERROR: Online backend references remain."
             exit 1
           fi
 
-          echo "Confirmed: NERO has no Supabase dependency."
+          echo "No Supabase or Firebase references found."
 
-      - name: Create Android platform if missing
+      - name: Generate Android project if missing
         shell: bash
         run: |
           set -euo pipefail
 
           if [ ! -f android/gradlew ]; then
-            flutter create --platforms=android --project-name nero_bible .
+            flutter create \
+              --platforms=android \
+              --project-name nero_bible \
+              .
           fi
 
-      - name: Download and prepare all 66 KJV books
+          test -f android/gradlew
+
+      - name: Download all 66 KJV Bible books
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tool/download_kjv.py
+
+      - name: Validate complete offline Bible data
         shell: bash
         run: |
           set -euo pipefail
 
           python - <<'PY'
           import json
-          import pathlib
-          import urllib.request
-          import urllib.parse
-
-          books = [
-              "Genesis", "Exodus", "Leviticus", "Numbers",
-              "Deuteronomy", "Joshua", "Judges", "Ruth",
-              "1 Samuel", "2 Samuel", "1 Kings", "2 Kings",
-              "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah",
-              "Esther", "Job", "Psalms", "Proverbs",
-              "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah",
-              "Lamentations", "Ezekiel", "Daniel", "Hosea",
-              "Joel", "Amos", "Obadiah", "Jonah",
-              "Micah", "Nahum", "Habakkuk", "Zephaniah",
-              "Haggai", "Zechariah", "Malachi", "Matthew",
-              "Mark", "Luke", "John", "Acts",
-              "Romans", "1 Corinthians", "2 Corinthians",
-              "Galatians", "Ephesians", "Philippians",
-              "Colossians", "1 Thessalonians", "2 Thessalonians",
-              "1 Timothy", "2 Timothy", "Titus", "Philemon",
-              "Hebrews", "James", "1 Peter", "2 Peter",
-              "1 John", "2 John", "3 John", "Jude",
-              "Revelation"
-          ]
-
-          output = pathlib.Path("assets/bible")
-          output.mkdir(parents=True, exist_ok=True)
-
-          base = "https://raw.githubusercontent.com/renniemaharaj/kjv-bible/main/"
-
-          def get_chapters(data):
-              if isinstance(data, dict):
-                  if isinstance(data.get("chapters"), (dict, list)):
-                      return data["chapters"]
-
-                  for value in data.values():
-                      if isinstance(value, dict) and isinstance(value.get("chapters"), (dict, list)):
-                          return value["chapters"]
-
-                  if data and all(str(k).isdigit() for k in data):
-                      return data
-
-              raise ValueError("Unsupported Bible chapter structure")
-
-          def normalize(book, data):
-              source = get_chapters(data)
-              result = {}
-
-              entries = enumerate(source, 1) if isinstance(source, list) else source.items()
-
-              for chapter_number, chapter in entries:
-                  if isinstance(chapter, dict) and "verses" in chapter:
-                      chapter = chapter["verses"]
-
-                  verses = {}
-
-                  if isinstance(chapter, list):
-                      for index, verse in enumerate(chapter, 1):
-                          if isinstance(verse, dict):
-                              number = verse.get("verse", index)
-                              text = verse.get("text", verse.get("verse_text", ""))
-                          else:
-                              number, text = index, verse
-
-                          verses[str(number)] = str(text)
-
-                  elif isinstance(chapter, dict):
-                      for number, verse in chapter.items():
-                          if isinstance(verse, dict):
-                              verse = verse.get("text", verse.get("verse_text", ""))
-
-                          verses[str(number)] = str(verse)
-
-                  if not verses:
-                      raise ValueError(f"{book} chapter {chapter_number} is empty")
-
-                  result[str(chapter_number)] = verses
-
-              if not result:
-                  raise ValueError(f"{book} has no chapters")
-
-              return {
-                  "book": book,
-                  "chapters": result
-              }
-
-          total_verses = 0
-
-          for book in books:
-              filename = urllib.parse.quote(book + ".json")
-              url = base + filename
-
-              request = urllib.request.Request(
-                  url,
-                  headers={"User-Agent": "NERO-Offline-Bible"}
-              )
-
-              print("Downloading:", book)
-
-              with urllib.request.urlopen(request, timeout=60) as response:
-                  data = json.loads(response.read().decode("utf-8-sig"))
-
-              bible = normalize(book, data)
-
-              total_verses += sum(
-                  len(verses)
-                  for verses in bible["chapters"].values()
-              )
-
-              name = book.lower().replace(" ", "_") + ".json"
-
-              (output / name).write_text(
-                  json.dumps(bible, ensure_ascii=False),
-                  encoding="utf-8"
-              )
-
-              print("Prepared:", name)
-
-          actual = list(output.glob("*.json"))
-
-          if len(actual) != 66:
-              raise SystemExit(
-                  f"Expected 66 Bible books, found {len(actual)}"
-              )
-
-          print("All 66 KJV books prepared.")
-          print("Total verses:", total_verses)
-          PY
-
-      - name: Verify Bible asset structure
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          python - <<'PY'
-          import json
+          import re
           from pathlib import Path
 
           folder = Path("assets/bible")
-          files = list(folder.glob("*.json"))
+          files = sorted(folder.glob("*.json"))
 
           if len(files) != 66:
-              raise SystemExit("The Bible must contain exactly 66 books.")
+              raise SystemExit(
+                  f"Expected 66 Bible books, found {len(files)}"
+              )
+
+          cjk = re.compile(
+              r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]"
+          )
+
+          total_chapters = 0
+          total_verses = 0
 
           for file in files:
-              data = json.loads(file.read_text(encoding="utf-8"))
-              if not isinstance(data.get("chapters"), dict):
-                  raise SystemExit(f"Invalid chapter structure: {file.name}")
+              raw = file.read_text(encoding="utf-8")
 
-          print("All 66 Bible files have the required chapters structure.")
+              if cjk.search(raw):
+                  raise SystemExit(
+                      f"Non-English characters found in {file.name}"
+                  )
+
+              data = json.loads(raw)
+              chapters = data.get("chapters")
+
+              if not isinstance(chapters, dict) or not chapters:
+                  raise SystemExit(
+                      f"Invalid chapter data in {file.name}"
+                  )
+
+              total_chapters += len(chapters)
+
+              for chapter, verses in chapters.items():
+                  if not isinstance(verses, dict) or not verses:
+                      raise SystemExit(
+                          f"Invalid verses in {file.name}, chapter {chapter}"
+                      )
+
+                  total_verses += len(verses)
+
+          if total_verses < 30000:
+              raise SystemExit(
+                  f"Bible data appears incomplete: {total_verses} verses"
+              )
+
+          print("Bible data validation passed.")
+          print(f"Books: 66")
+          print(f"Chapters: {total_chapters}")
+          print(f"Verses: {total_verses}")
           PY
 
       - name: Install Flutter dependencies
@@ -240,10 +186,13 @@ jobs:
       - name: Generate NERO launcher icon
         run: dart run flutter_launcher_icons
 
-      - name: Build NERO Android APK
+      - name: Analyze Flutter project
+        run: flutter analyze --no-pub --no-fatal-infos
+
+      - name: Build release APK
         run: flutter build apk --release
 
-      - name: Check APK
+      - name: Verify generated APK
         shell: bash
         run: |
           set -euo pipefail
@@ -251,9 +200,11 @@ jobs:
           APK="build/app/outputs/flutter-apk/app-release.apk"
 
           test -s "$APK"
+
+          echo "NERO APK successfully generated."
           ls -lh "$APK"
 
-      - name: Upload NERO Offline APK
+      - name: Upload NERO APK
         uses: actions/upload-artifact@v4
         with:
           name: NERO-Offline-Android-APK
