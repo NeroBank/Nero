@@ -161,7 +161,7 @@ class _Dashboard extends StatelessWidget {
       const Padding(padding: EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('WELCOME TO NERO', style: TextStyle(color: gold, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
         SizedBox(height: 6), Text('Read, Reflect & Grow', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold)),
-        Text('"The LORD is my shepherd; I shall not want."', style: TextStyle(fontSize: 15, color: dark ? Colors.white70 : Colors.black87, height: 1.5)),
+        const Text('"The LORD is my shepherd; I shall not want."'),
       ])),
     ])),
     const SizedBox(height: 18),
