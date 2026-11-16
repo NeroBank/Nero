@@ -12,20 +12,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: nero-android-${{ github.ref }}
+  group: nero-offline-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build NERO Offline Bible APK
+    name: Build NERO Offline Bible
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
-      - name: Check out NERO repository
+      - name: Check out NERO
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -42,24 +42,18 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Check required NERO files
-        shell: bash
+      - name: Verify project files
         run: |
           set -euo pipefail
-
           test -f pubspec.yaml
           test -f lib/main.dart
           test -f tool/download_kjv.py
           test -f assets/images/bible_banner.png
           test -f assets/images/icon/nero_launcher.png
+          echo "NERO project files verified."
 
-          echo "All required NERO project files are present."
-
-      - name: Check English-only app source
-        shell: bash
+      - name: Check English-only source
         run: |
-          set -euo pipefail
-
           python - <<'PY'
           from pathlib import Path
           import re
@@ -67,7 +61,7 @@ jobs:
           files = [
               Path("lib/main.dart"),
               Path("pubspec.yaml"),
-              Path("tool/download_kjv.py"),
+              Path("tool/download_kjv.py")
           ]
 
           pattern = re.compile(
@@ -75,80 +69,60 @@ jobs:
           )
 
           for file in files:
-              content = file.read_text(encoding="utf-8")
-              if pattern.search(content):
-                  raise SystemExit(
-                      f"Non-English characters found in {file}"
-                  )
+              if pattern.search(file.read_text(encoding="utf-8")):
+                  raise SystemExit(f"Non-English characters found: {file}")
 
           print("English-only source check passed.")
           PY
 
-      - name: Confirm Supabase and Firebase are removed
-        shell: bash
+      - name: Confirm backend removal
         run: |
           set -euo pipefail
-
-          if grep -niE \
-            'supabase|firebase|SUPABASE_URL|SUPABASE_ANON_KEY' \
-            pubspec.yaml lib/main.dart; then
-            echo "ERROR: Online backend references remain."
+          if grep -niE 'supabase|firebase' pubspec.yaml lib/main.dart; then
+            echo "Unexpected online backend reference found."
             exit 1
           fi
-
           echo "No Supabase or Firebase references found."
 
       - name: Generate Android project if missing
-        shell: bash
         run: |
           set -euo pipefail
-
           if [ ! -f android/gradlew ]; then
             flutter create \
               --platforms=android \
               --project-name nero_bible \
               .
           fi
-
           test -f android/gradlew
 
-      - name: Download all 66 KJV Bible books
-        shell: bash
-        run: |
-          set -euo pipefail
-          python tool/download_kjv.py
+      - name: Download all 66 KJV books
+        run: python tool/download_kjv.py
 
-      - name: Validate complete offline Bible data
-        shell: bash
+      - name: Validate Bible data
         run: |
-          set -euo pipefail
-
           python - <<'PY'
           import json
           import re
           from pathlib import Path
 
-          folder = Path("assets/bible")
-          files = sorted(folder.glob("*.json"))
+          files = sorted(Path("assets/bible").glob("*.json"))
 
           if len(files) != 66:
               raise SystemExit(
-                  f"Expected 66 Bible books, found {len(files)}"
+                  f"Expected 66 books, found {len(files)}"
               )
 
+          total_verses = 0
           cjk = re.compile(
               r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]"
           )
-
-          total_chapters = 0
-          total_verses = 0
 
           for file in files:
               raw = file.read_text(encoding="utf-8")
 
               if cjk.search(raw):
                   raise SystemExit(
-                      f"Non-English characters found in {file.name}"
+                      f"Non-English text found in {file.name}"
                   )
 
               data = json.loads(raw)
@@ -156,53 +130,42 @@ jobs:
 
               if not isinstance(chapters, dict) or not chapters:
                   raise SystemExit(
-                      f"Invalid chapter data in {file.name}"
+                      f"Invalid Bible data: {file.name}"
                   )
-
-              total_chapters += len(chapters)
 
               for chapter, verses in chapters.items():
                   if not isinstance(verses, dict) or not verses:
                       raise SystemExit(
-                          f"Invalid verses in {file.name}, chapter {chapter}"
+                          f"Invalid chapter in {file.name}: {chapter}"
                       )
-
                   total_verses += len(verses)
 
           if total_verses < 30000:
               raise SystemExit(
-                  f"Bible data appears incomplete: {total_verses} verses"
+                  f"Incomplete Bible: {total_verses} verses"
               )
 
-          print("Bible data validation passed.")
-          print(f"Books: 66")
-          print(f"Chapters: {total_chapters}")
-          print(f"Verses: {total_verses}")
+          print("All 66 KJV books validated.")
+          print(f"Total verses: {total_verses}")
           PY
 
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Generate NERO launcher icon
+      - name: Generate launcher icon
         run: dart run flutter_launcher_icons
 
-      - name: Analyze Flutter project
-        run: flutter analyze --no-pub --no-fatal-infos
+      - name: Analyze NERO app source
+        run: flutter analyze lib --no-pub --no-fatal-infos
 
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Verify generated APK
-        shell: bash
+      - name: Verify APK
         run: |
           set -euo pipefail
-
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-
-          test -s "$APK"
-
-          echo "NERO APK successfully generated."
-          ls -lh "$APK"
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
 
       - name: Upload NERO APK
         uses: actions/upload-artifact@v4
